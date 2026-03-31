@@ -9,17 +9,17 @@
   },
   "plugins": [
     {
-      "name": "telegram-bridge",
+      "name": "teams-bridge",
       "source": ".",
-      "description": "Bidirectional Telegram bridge for GitHub Copilot CLI. Send messages from Telegram and get agent responses back.",
+      "description": "Bidirectional Microsoft Teams bridge for GitHub Copilot CLI personal chats.",
       "version": "1.0.0",
       "author": {
         "name": "examon",
         "url": "https://github.com/examon"
       },
-      "homepage": "https://github.com/examon/copilot-cli-telegram-bridge",
+      "homepage": "https://github.com/iamjohanson/copilot-cli-teams-bridge",
       "license": "MIT",
-      "keywords": ["telegram", "bridge", "remote", "messaging"],
+      "keywords": ["teams", "bridge", "remote", "messaging", "microsoft-teams"],
       "category": "integration",
       "skills": "skills/"
     }

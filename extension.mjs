@@ -1,5 +1,5 @@
 // ============================================================
-// Copilot CLI Telegram Bridge Extension
+// Copilot CLI Teams Bridge Extension
 // ============================================================
 
 import { joinSession } from "@github/copilot-sdk/extension";
@@ -15,11 +15,9 @@ const EXT_DIR = import.meta.dirname;
 const ACCESS_PATH = join(EXT_DIR, "access.json");
 const BOTS_REGISTRY_PATH = join(EXT_DIR, "bots.json");
 const BOTS_DIR = join(EXT_DIR, "bots");
-const TMP_DIR = join("/tmp", `telegram-bridge-${process.pid}`);
-
-const TELEGRAM_API = "https://api.telegram.org";
+const TMP_DIR = join("/tmp", `teams-bridge-${process.pid}`);
 const POLL_TIMEOUT = 30;
-const CHUNK_MAX = 4096;
+const CHUNK_MAX = 28000;
 const SEND_PACE_MS = 50;
 const TYPING_INTERVAL_MS = 4000;
 const TYPING_DEBOUNCE_MS = 60000;
@@ -40,7 +38,7 @@ function loadJsonOrDefault(filePath, defaultValue) {
     } catch (err) {
         if (err.code === "ENOENT") return structuredClone(defaultValue);
         if (err instanceof SyntaxError) {
-            console.warn(`telegram-bridge: corrupted JSON in ${filePath}, using defaults`);
+            console.warn(`teams-bridge: corrupted JSON in ${filePath}, using defaults`);
             return structuredClone(defaultValue);
         }
         throw err;
@@ -72,88 +70,6 @@ function chunkMessage(text, maxLen = CHUNK_MAX) {
     return chunks;
 }
 
-// --- Markdown to Telegram HTML converter ---
-
-function escapeHtml(s) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function markdownToTelegramHtml(md) {
-    const holds = [];
-
-    function hold(html) {
-        const i = holds.length;
-        holds.push(html);
-        return `\x00${i}\x00`;
-    }
-
-    let t = md;
-
-    // Phase 1: Extract protected regions (no markdown processing inside these)
-
-    // Fenced code blocks: ```lang\ncode\n```
-    t = t.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-        code = code.replace(/\n$/, "");
-        const cls = lang ? ` class="language-${lang}"` : "";
-        return hold(`<pre><code${cls}>${escapeHtml(code)}</code></pre>`);
-    });
-
-    // Inline code: `code`
-    t = t.replace(/`([^`\n]+)`/g, (_, code) => {
-        return hold(`<code>${escapeHtml(code)}</code>`);
-    });
-
-    // Images: ![alt](url) -> linked text (before regular links)
-    t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
-        const label = alt || "image";
-        return hold(`<a href="${escapeHtml(url)}">[${escapeHtml(label)}]</a>`);
-    });
-
-    // Links: [text](url)
-    t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
-        return hold(`<a href="${escapeHtml(url)}">${escapeHtml(text)}</a>`);
-    });
-
-    // Phase 2: HTML-escape remaining text
-    t = escapeHtml(t);
-
-    // Phase 3: Inline formatting (order matters: bold+italic before bold before italic)
-
-    // Bold+italic: ***text***
-    t = t.replace(/\*\*\*(.+?)\*\*\*/g, "<b><i>$1</i></b>");
-
-    // Bold: **text**
-    t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-
-    // Italic: *text* (not adjacent to other asterisks)
-    t = t.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<i>$1</i>");
-
-    // Strikethrough: ~~text~~
-    t = t.replace(/~~(.+?)~~/g, "<s>$1</s>");
-
-    // Phase 4: Block-level formatting
-
-    // Headers: # text -> bold text
-    t = t.replace(/^#{1,6}\s+(.+)$/gm, "<b>$1</b>");
-
-    // Blockquotes: consecutive lines starting with > (escaped to &gt;)
-    t = t.replace(/(?:^&gt;[ ]?.*$\n?)+/gm, (block) => {
-        const lines = block.trimEnd().split("\n");
-        const content = lines.map(l => l.replace(/^&gt;[ ]?/, "")).join("\n");
-        return `<blockquote>${content}</blockquote>\n`;
-    });
-
-    // Horizontal rules
-    t = t.replace(/^-{3,}$/gm, "\u2500".repeat(20));
-    t = t.replace(/^\*{3,}$/gm, "\u2500".repeat(20));
-    t = t.replace(/^_{3,}$/gm, "\u2500".repeat(20));
-
-    // Phase 5: Restore placeholders
-    t = t.replace(/\x00(\d+)\x00/g, (_, i) => holds[parseInt(i)]);
-
-    return t;
-}
-
 function generatePairingCode() {
     return randomBytes(4).toString("hex").slice(0, 6);
 }
@@ -163,13 +79,28 @@ function sleep(ms) {
 }
 
 // ============================================================
-// Section 3: Telegram Bot API Client
+function parseBridgeConfig(text) {
+    try {
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== "object") return null;
+        const relayUrl = typeof parsed.relayUrl === "string" ? parsed.relayUrl.trim().replace(/\/$/, "") : "";
+        const sharedSecret = typeof parsed.sharedSecret === "string" ? parsed.sharedSecret.trim() : "";
+        if (!relayUrl || !sharedSecret) return null;
+        return { relayUrl, sharedSecret };
+    } catch {
+        return null;
+    }
+}
+
+// ============================================================
+// Section 3: Teams Relay API Client
 // ============================================================
 
 let botToken;
+let relayBaseUrl;
 
-async function callTelegram(method, params = {}) {
-    const url = `${TELEGRAM_API}/bot${botToken}/${method}`;
+async function callBridge(method, params = {}) {
+    const url = `${relayBaseUrl}/api/bridge/${method}`;
     const timeoutMs = method === "getUpdates"
         ? (POLL_TIMEOUT + 10) * 1000
         : API_TIMEOUT_MS;
@@ -179,129 +110,80 @@ async function callTelegram(method, params = {}) {
         : timeoutSignal;
     const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "x-bridge-secret": botToken,
+        },
         body: JSON.stringify(params),
         signal,
     });
-    if (res.status === 409) {
-        const err = new Error("Conflict: another process is polling this bot");
-        err.status = 409;
-        throw err;
-    }
     if (res.status === 429) {
         const body = await res.json().catch(() => ({}));
         const err = new Error("Rate limited");
         err.status = 429;
-        err.retryAfter = body?.parameters?.retry_after || 5;
+        err.retryAfter = body?.retryAfter || 5;
         throw err;
     }
     if (!res.ok) {
         const body = await res.text().catch(() => "");
-        const err = new Error(`Telegram API ${method} failed: ${res.status} ${body}`);
+        const err = new Error(`Teams relay ${method} failed: ${res.status} ${body}`);
         err.status = res.status;
         throw err;
     }
     const json = await res.json();
-    if (!json.ok) throw new Error(`Telegram API ${method} returned ok=false: ${JSON.stringify(json)}`);
+    if (!json.ok) throw new Error(`Teams relay ${method} returned ok=false: ${JSON.stringify(json)}`);
     return json.result;
 }
 
-function getMe() { return callTelegram("getMe"); }
+function getMe() { return callBridge("getMe"); }
 
 function getUpdates(offset, timeout) {
-    return callTelegram("getUpdates", { offset, timeout, allowed_updates: ["message"] });
+    return callBridge("getUpdates", { offset, timeout });
 }
 
 function sendMessage(chatId, text, parseMode) {
     const params = { chat_id: chatId, text };
     if (parseMode) params.parse_mode = parseMode;
-    return callTelegram("sendMessage", params);
+    return callBridge("sendMessage", params);
 }
 
 async function sendFormattedMessage(chatId, markdown) {
-    const html = markdownToTelegramHtml(markdown);
-    try {
-        return await callTelegram("sendMessage", {
-            chat_id: chatId, text: html, parse_mode: "HTML",
-        });
-    } catch (err) {
-        // Fall back to plain text if Telegram rejects our HTML
-        if (err.message && /can.t parse|entit/i.test(err.message)) {
-            return callTelegram("sendMessage", { chat_id: chatId, text: markdown });
-        }
-        throw err;
-    }
+    return sendMessage(chatId, markdown);
 }
 
 async function sendPhoto(chatId, base64Data, mimeType, caption) {
-    const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/gif" ? "gif" : "png";
-    const buf = Buffer.from(base64Data, "base64");
-    const form = new FormData();
-    form.append("chat_id", String(chatId));
-    form.append("photo", new File([buf], `image.${ext}`, { type: mimeType }));
-    if (caption) form.append("caption", caption.slice(0, 1024));
-
-    const url = `${TELEGRAM_API}/bot${botToken}/sendPhoto`;
-    const res = await fetch(url, { method: "POST", body: form });
-    if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new Error(`Telegram sendPhoto failed: ${res.status} ${body}`);
-    }
-    return (await res.json()).result;
+    return sendMessage(chatId, caption || "(This response included an image. Teams relay v1 forwards text only.)");
 }
 
 async function sendDocument(chatId, base64Data, mimeType, filename, caption) {
-    const buf = Buffer.from(base64Data, "base64");
-    const form = new FormData();
-    form.append("chat_id", String(chatId));
-    form.append("document", new File([buf], filename || "file", { type: mimeType }));
-    if (caption) form.append("caption", caption.slice(0, 1024));
-
-    const url = `${TELEGRAM_API}/bot${botToken}/sendDocument`;
-    const res = await fetch(url, { method: "POST", body: form });
-    if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new Error(`Telegram sendDocument failed: ${res.status} ${body}`);
-    }
-    return (await res.json()).result;
+    return sendMessage(chatId, caption || `(This response included a file: ${filename || "attachment"}. Teams relay v1 forwards text only.)`);
 }
 
 function sendChatAction(chatId, action = "typing") {
-    return callTelegram("sendChatAction", { chat_id: chatId, action });
+    return callBridge("sendChatAction", { chat_id: chatId, action });
 }
 
 function editMessageText(chatId, messageId, text, parseMode) {
     const params = { chat_id: chatId, message_id: messageId, text };
     if (parseMode) params.parse_mode = parseMode;
-    return callTelegram("editMessageText", params);
+    return callBridge("editMessageText", params);
 }
 
 function deleteMessage(chatId, messageId) {
-    return callTelegram("deleteMessage", { chat_id: chatId, message_id: messageId });
+    return callBridge("deleteMessage", { chat_id: chatId, message_id: messageId });
 }
 
 
 function setMessageReaction(chatId, messageId, emoji) {
-    return callTelegram("setMessageReaction", {
-        chat_id: chatId, message_id: messageId,
-        reaction: [{ type: "emoji", emoji }],
-    });
+    return Promise.resolve();
 }
 
 function getFile(fileId) {
-    return callTelegram("getFile", { file_id: fileId });
+    throw new Error("Teams relay v1 does not support file downloads.");
 }
 
 async function downloadFile(filePath) {
-    const url = `${TELEGRAM_API}/file/bot${botToken}/${filePath}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    ensureTmpDir();
-    const localName = basename(filePath);
-    const localPath = join(TMP_DIR, localName);
-    writeFileSync(localPath, buffer);
-    return localPath;
+    throw new Error("Teams relay v1 does not support file downloads.");
 }
 
 // ============================================================
@@ -398,8 +280,8 @@ function reloadAccess() {
     access = loadJsonOrDefault(ACCESS_PATH, { allowedUsers: [], pending: {} });
 }
 
-function isAllowed(userId) {
-    return access.allowedUsers.includes(String(userId));
+function isAllowed(chatId) {
+    return access.allowedUsers.includes(String(chatId));
 }
 
 function cleanExpiredPending() {
@@ -421,13 +303,13 @@ async function handlePairing(chatId, userId, text) {
     const pending = access.pending?.[chatIdStr];
     if (pending) {
         if (text.trim().toLowerCase() === pending.code.toLowerCase()) {
-            if (!access.allowedUsers.includes(userIdStr)) {
-                access.allowedUsers.push(userIdStr);
+            if (!access.allowedUsers.includes(chatIdStr)) {
+                access.allowedUsers.push(chatIdStr);
             }
             delete access.pending[chatIdStr];
             saveJsonAtomic(ACCESS_PATH, access);
             await enqueue(() => sendMessage(chatId, "Paired! You can now send messages to Copilot CLI."));
-            await session.log(`Telegram user ${userIdStr} paired successfully.`);
+            await session.log(`Teams chat ${chatIdStr} paired successfully for user ${userIdStr}.`);
             return;
         } else {
             await enqueue(() => sendMessage(chatId, "Invalid code. Try again."));
@@ -441,7 +323,7 @@ async function handlePairing(chatId, userId, text) {
     access.pending[chatIdStr] = { code, timestamp: Date.now() };
     saveJsonAtomic(ACCESS_PATH, access);
     await enqueue(() => sendMessage(chatId, "A pairing code has been generated. Check the Copilot CLI terminal for the code and send it here to confirm."));
-    await session.log(`Telegram pairing request from user ${userIdStr}. Pairing code: ${code}`);
+    await session.log(`Teams pairing request from user ${userIdStr}. Pairing code: ${code}`);
 }
 
 // ============================================================
@@ -672,28 +554,15 @@ function cleanupTmpDir() {
 }
 
 async function handleFileAttachment(message) {
-    let fileId, displayName;
-    if (message.photo && message.photo.length > 0) {
-        const photo = message.photo[message.photo.length - 1];
-        fileId = photo.file_id;
-        displayName = `photo_${message.message_id}.jpg`;
-    } else if (message.document) {
-        fileId = message.document.file_id;
-        displayName = message.document.file_name || `document_${message.message_id}`;
-    } else {
-        return null;
-    }
-    const fileInfo = await getFile(fileId);
-    const localPath = await downloadFile(fileInfo.file_path);
-    return { path: localPath, displayName };
+    return null;
 }
 
 // ============================================================
-// Section 9: Message Processing (inbound from Telegram)
+// Section 9: Message Processing (inbound from Teams relay)
 // ============================================================
 
 function getAllowedChatIds() {
-    return access.allowedUsers.map(Number);
+    return access.allowedUsers.map(String);
 }
 
 async function processUpdate(update) {
@@ -704,13 +573,15 @@ async function processUpdate(update) {
     const userId = message.from?.id;
     if (userId == null) return;
     const text = message.text || message.caption || "";
+    const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
+    const chatIdStr = String(chatId);
     const userIdStr = String(userId);
 
     // Reload access.json on each message (hot-reload)
     reloadAccess();
 
     // If awaiting ask_user input and sender is allowed, resolve the pending promise
-    if (awaitingInput && isAllowed(userIdStr)) {
+    if (awaitingInput && isAllowed(chatIdStr)) {
         const { resolve } = awaitingInput;
         clearTimeout(awaitingInput.timer);
         awaitingInput = null;
@@ -718,13 +589,10 @@ async function processUpdate(update) {
         return;
     }
 
-    if (!isAllowed(userIdStr)) {
+    if (!isAllowed(chatIdStr)) {
         await handlePairing(chatId, userId, text);
         return;
     }
-
-    // Ack reaction
-    enqueue(() => setMessageReaction(chatId, message.message_id, "\uD83D\uDC40").catch(() => {}));
 
     // Start typing for all allowed chats
     const allChatIds = getAllowedChatIds();
@@ -733,7 +601,7 @@ async function processUpdate(update) {
     scheduleBubbleUpdate();
 
     // Handle file attachments
-    if (message.photo || message.document) {
+    if (hasAttachments) {
         try {
             const attachment = await handleFileAttachment(message);
             if (attachment) {
@@ -747,6 +615,8 @@ async function processUpdate(update) {
             await enqueue(() => sendMessage(chatId, `Failed to process attachment: ${err.message}`));
             return;
         }
+        await enqueue(() => sendMessage(chatId, "Teams relay v1 currently supports text-only messages."));
+        return;
     }
 
     if (text) {
@@ -754,11 +624,11 @@ async function processUpdate(update) {
         return;
     }
 
-    await enqueue(() => sendMessage(chatId, "Unsupported message type. Text, photos, and documents only."));
+    await enqueue(() => sendMessage(chatId, "Unsupported message type. Teams relay v1 supports text-only messages."));
 }
 
 // ============================================================
-// Section 10: Event Handlers (outbound to Telegram)
+// Section 10: Event Handlers (outbound to Teams)
 // ============================================================
 
 let eventHandlersRegistered = false;
@@ -806,9 +676,7 @@ function setupEventHandlers(sess) {
         dismissBubble();
     });
 
-    // Relay images and documents from tool results to Telegram
-    const PHOTO_MIMES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
-    const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+    // Teams relay v1 forwards text and typing only.
 
     sess.on("tool.execution_start", (event) => {
         if (!connected) return;
@@ -840,20 +708,8 @@ function setupEventHandlers(sess) {
         const chatIds = getAllowedChatIds();
         for (const block of contents) {
             if (block.type === "image" && block.data && block.mimeType) {
-                const bytes = Math.ceil(block.data.length * 3 / 4);
-                if (bytes > MAX_PHOTO_BYTES) {
-                    for (const chatId of chatIds) {
-                        enqueue(() => sendMessage(chatId, "(Image too large for Telegram, >10MB)"));
-                    }
-                    continue;
-                }
                 for (const chatId of chatIds) {
-                    if (PHOTO_MIMES.has(block.mimeType)) {
-                        enqueue(() => sendPhoto(chatId, block.data, block.mimeType));
-                    } else {
-                        const ext = block.mimeType.split("/")[1] || "bin";
-                        enqueue(() => sendDocument(chatId, block.data, block.mimeType, `image.${ext}`));
-                    }
+                    enqueue(() => sendMessage(chatId, "(This response included an image. Teams relay v1 forwards text only.)"));
                 }
             }
         }
@@ -928,7 +784,7 @@ async function handleSetup(name) {
     registry = loadJsonOrDefault(BOTS_REGISTRY_PATH, {});
 
     if (!name) {
-        await session.log("Usage: /telegram setup <name>");
+        await session.log("Usage: /teams setup <name>");
         return;
     }
     if (!/^[a-z0-9_-]+$/.test(name)) {
@@ -942,12 +798,13 @@ async function handleSetup(name) {
 
     pendingSetupName = name;
     await session.log(
-        "Telegram Bridge Setup\n\n" +
+        "Teams Bridge Setup\n\n" +
         "Steps:\n" +
-        "1. Open Telegram, search for @BotFather\n" +
-        "2. Send /newbot and follow the prompts\n" +
-        "3. Copy the bot token BotFather gives you\n" +
-        "4. Paste it here"
+        "1. Deploy the Teams relay from this repository and note its public HTTPS URL\n" +
+        "2. Choose a BRIDGE_SHARED_SECRET value for that relay\n" +
+        "3. Install your Teams app and send it one message so the relay learns your chat\n" +
+        "4. Paste this JSON here:\n" +
+        '{"relayUrl":"https://your-relay.example.com","sharedSecret":"your-secret"}'
     );
 }
 
@@ -959,7 +816,7 @@ async function handleConnect(name, sessionId) {
         return;
     }
     if (!registry[name]) {
-        await session.log(`No bot named '${name}'. Run /telegram setup ${name} first.`);
+        await session.log(`No Teams bridge named '${name}'. Run /teams setup ${name} first.`);
         return;
     }
     if (connected) {
@@ -967,27 +824,29 @@ async function handleConnect(name, sessionId) {
         return;
     }
 
-    // Check lock -- if another live session holds it, take over (Telegram 409 will release them)
+    // Check lock -- if another live session holds it, take over.
     const lock = readLock(name);
     let tookOverFrom = null;
     if (lock && !isLockStale(lock) && lock.sessionId !== sessionId) {
         tookOverFrom = lock.sessionId;
     }
 
-    // Validate token via getMe
-    botToken = registry[name].token;
+    // Validate relay via getMe
+    botToken = registry[name].sharedSecret;
+    relayBaseUrl = registry[name].relayUrl.replace(/\/$/, "");
     try {
         botInfo = await getMe();
     } catch (err) {
         botToken = null;
+        relayBaseUrl = null;
         botInfo = null;
-        if (err.status === 401) {
+        if (err.status === 401 || err.status === 403) {
             await session.log(
-                `Bot token is invalid or revoked. Re-register with \`/telegram remove ${name}\` then \`/telegram setup ${name}\`.`,
+                `The saved relay secret is invalid. Re-register with \`/teams remove ${name}\` then \`/teams setup ${name}\`.`,
                 { level: "error" }
             );
         } else {
-            await session.log("Failed to reach Telegram API. Check your network and try again.", { level: "error" });
+            await session.log("Failed to reach the Teams relay. Check the relay URL and try again.", { level: "error" });
         }
         return;
     }
@@ -1009,18 +868,18 @@ async function handleConnect(name, sessionId) {
 
     if (chatIds.length === 0) {
         await session.log(
-            `Telegram bridge connected (@${botInfo.username}).\n\n` +
-            `No paired users yet. To pair:\n` +
-            `1. Open Telegram and send any message to @${botInfo.username}\n` +
-            `2. The bot will reply that a pairing code has been generated\n` +
+            `Teams bridge connected (${botInfo.username}).\n\n` +
+            `No paired chats yet. To pair:\n` +
+            `1. Open Microsoft Teams and send any message to ${botInfo.username}\n` +
+            `2. The app will reply that a pairing code has been generated\n` +
             `3. The pairing code will appear here in the Copilot CLI terminal\n` +
-            `4. Send that code to @${botInfo.username} in Telegram to complete pairing`
+            `4. Send that code back in Teams to complete pairing`
         );
     } else {
         if (tookOverFrom) {
-            await session.log(`Took over bot '${name}' from session ${tookOverFrom}. Telegram bridge connected (@${botInfo.username}).`);
+            await session.log(`Took over bridge '${name}' from session ${tookOverFrom}. Teams bridge connected (${botInfo.username}).`);
         } else {
-            await session.log(`Telegram bridge connected (@${botInfo.username}).`);
+            await session.log(`Teams bridge connected (${botInfo.username}).`);
             for (const chatId of chatIds) {
                 enqueue(() => sendMessage(chatId, "Copilot CLI session connected."));
             }
@@ -1028,7 +887,7 @@ async function handleConnect(name, sessionId) {
     }
 
     pollLoop().catch(err => {
-        console.error("telegram-bridge: poll loop error:", err.message);
+        console.error("teams-bridge: poll loop error:", err.message);
     });
 }
 
@@ -1065,19 +924,20 @@ async function handleDisconnect(sessionId) {
 
     // 6. Clear all bot-specific state
     botToken = null;
+    relayBaseUrl = null;
     botInfo = null;
     currentBotName = null;
     currentSessionId = null;
     state = null;
 
-    await session.log("Telegram bridge disconnected.");
+    await session.log("Teams bridge disconnected.");
 }
 
 function formatBotLines(registry) {
     const names = Object.keys(registry);
     const lines = [];
     for (const name of names) {
-        const username = registry[name].username || "unknown";
+        const username = registry[name].username || registry[name].relayUrl || "unknown";
         const lock = readLock(name);
         let status;
         if (connected && currentBotName === name) {
@@ -1087,7 +947,7 @@ function formatBotLines(registry) {
         } else {
             status = "(available)";
         }
-        lines.push(`  ${name}  @${username}  ${status}`);
+        lines.push(`  ${name}  ${username}  ${status}`);
     }
     return lines;
 }
@@ -1097,14 +957,14 @@ async function handleStatus(sessionId) {
     const names = Object.keys(registry);
 
     if (names.length === 0) {
-        await session.log("No bots registered. Use /telegram setup <name> to add one.");
+        await session.log("No Teams bridges registered. Use /teams setup <name> to add one.");
         return;
     }
 
     const lines = ["Registered bots:", ...formatBotLines(registry)];
 
     const pairedCount = access?.allowedUsers?.length || 0;
-    lines.push(`\nPaired users: ${pairedCount}`);
+    lines.push(`\nPaired chats: ${pairedCount}`);
 
     await session.log(lines.join("\n"));
 }
@@ -1114,13 +974,13 @@ async function listBots(sessionId) {
     const names = Object.keys(registry);
 
     if (names.length === 0) {
-        await session.log("No bots registered. Use /telegram setup <name> to add one.");
+        await session.log("No Teams bridges registered. Use /teams setup <name> to add one.");
         return;
     }
 
     const lines = ["Available bots:", ...formatBotLines(registry)];
 
-    lines.push("\nUse: /telegram connect <name>");
+    lines.push("\nUse: /teams connect <name>");
     await session.log(lines.join("\n"));
 }
 
@@ -1128,20 +988,20 @@ async function handleRemove(name, sessionId) {
     registry = loadJsonOrDefault(BOTS_REGISTRY_PATH, {});
 
     if (!name) {
-        await session.log("Usage: /telegram remove <name>");
+        await session.log("Usage: /teams remove <name>");
         return;
     }
     if (!registry[name]) {
-        await session.log(`No bot named '${name}'.`);
+        await session.log(`No Teams bridge named '${name}'.`);
         return;
     }
 
     const lock = readLock(name);
     if (lock && !isLockStale(lock)) {
         if (lock.sessionId === sessionId) {
-            await session.log(`Bot '${name}' is connected to this session. Disconnect first.`);
+            await session.log(`Bridge '${name}' is connected to this session. Disconnect first.`);
         } else {
-            await session.log(`Bot '${name}' is in use by session ${lock.sessionId}. Disconnect that session first.`);
+            await session.log(`Bridge '${name}' is in use by session ${lock.sessionId}. Disconnect that session first.`);
         }
         return;
     }
@@ -1150,15 +1010,15 @@ async function handleRemove(name, sessionId) {
     saveJsonAtomic(BOTS_REGISTRY_PATH, registry, 0o600);
     try { rmSync(botDir(name), { recursive: true, force: true }); } catch {}
 
-    await session.log(`Bot '${name}' removed.`);
+    await session.log(`Bridge '${name}' removed.`);
 }
 
 // ============================================================
 // Section 11c: Command Router
 // ============================================================
 
-// Route /telegram subcommands dispatched via SDK command protocol.
-async function handleTelegramCommand(args, sessionId) {
+// Route /teams subcommands dispatched via SDK command protocol.
+async function handleTeamsCommand(args, sessionId) {
     const parts = args.trim().split(/\s+/);
     const subcommand = parts[0]?.toLowerCase() || "help";
     const botName = parts[1] || "";
@@ -1180,17 +1040,17 @@ async function handleTelegramCommand(args, sessionId) {
             await handleRemove(botName, sessionId);
             break;
         default:
-            await session.log("Available: /telegram setup|connect|disconnect|status|remove");
+            await session.log("Available: /teams setup|connect|disconnect|status|remove");
             break;
     }
 }
 
-// Register /telegram as an SDK slash command via the wire protocol.
+// Register /teams as an SDK slash command via the wire protocol.
 // The SDK's joinSession doesn't expose the `commands` parameter, so we
 // send a follow-up session.resume with just the commands field. The server
 // merges this additively -- undefined fields are skipped.
 async function registerSlashCommand(sess) {
-    const commands = [{ name: "telegram", description: "Telegram bridge: setup, connect, disconnect, status, remove" }];
+    const commands = [{ name: "teams", description: "Teams bridge: setup, connect, disconnect, status, remove" }];
     // Must include hooks:true to preserve hook registrations from joinSession.
     // Without it, the server treats this as enableHooksCallback:false and removes
     // the ad-hoc hooks that were just registered.
@@ -1202,11 +1062,11 @@ async function registerSlashCommand(sess) {
 
     sess.on("command.execute", (event) => {
         const { requestId, commandName, args } = event.data;
-        if (commandName !== "telegram") return;
-        handleTelegramCommand(args, sess.sessionId)
+        if (commandName !== "teams") return;
+        handleTeamsCommand(args, sess.sessionId)
             .then(() => sess.rpc.commands.handlePendingCommand({ requestId }))
             .catch(err => {
-                console.error("telegram-bridge: command error:", err.message);
+                console.error("teams-bridge: command error:", err.message);
                 sess.rpc.commands.handlePendingCommand({ requestId, error: err.message });
             });
     });
@@ -1229,7 +1089,7 @@ async function pollLoop() {
                 try {
                     await processUpdate(update);
                 } catch (err) {
-                    console.error("telegram-bridge: error processing update:", err.message);
+                    console.error("teams-bridge: error processing update:", err.message);
                 }
                 state.offset = update.update_id + 1;
             }
@@ -1255,19 +1115,20 @@ async function pollLoop() {
 
                 const lostBotName = currentBotName;
                 botToken = null;
+                relayBaseUrl = null;
                 botInfo = null;
                 currentBotName = null;
                 currentSessionId = null;
                 state = null;
 
                 await session.log(
-                    `Telegram bridge released (another session took over). Type /telegram connect ${lostBotName || "<name>"} to reclaim.`,
+                    `Teams bridge released (another session took over). Type /teams connect ${lostBotName || "<name>"} to reclaim.`,
                     { level: "warning" }
                 );
                 break;
             }
 
-            console.error(`telegram-bridge: poll error (retry in ${errorDelay}ms):`, err.message);
+            console.error(`teams-bridge: poll error (retry in ${errorDelay}ms):`, err.message);
             await sleep(errorDelay);
             errorDelay = Math.min(errorDelay * 2, ERROR_RETRY_MAX_MS);
         }
@@ -1293,16 +1154,16 @@ async function main() {
                 let status;
                 let botsBlock = "";
                 if (names.length === 0) {
-                    status = "No bots registered. Use /telegram setup <name> to add one.";
+                    status = "No Teams bridges registered. Use /teams setup <name> to add one.";
                 } else {
-                    status = `${names.length} bot(s) registered. Use /telegram connect <name> to start.`;
+                    status = `${names.length} bridge(s) registered. Use /teams connect <name> to start.`;
                     const botLines = formatBotLines(registry);
-                    botsBlock = "\nRegistered bots:\n" + botLines.join("\n");
+                    botsBlock = "\nRegistered bridges:\n" + botLines.join("\n");
                 }
 
                 return {
                     additionalContext:
-                        `[Telegram Bridge Extension]\n` +
+                        `[Teams Bridge Extension]\n` +
                         `Extension directory: ${EXT_DIR}\n` +
                         `Status: ${status}` +
                         botsBlock + "\n" +
@@ -1315,49 +1176,59 @@ async function main() {
                 if (!pendingSetupName) return;
                 const prompt = input.prompt.trim();
                 if (prompt.startsWith("/")) return;
-                if (!prompt.match(/^\d+:[A-Za-z0-9_-]+$/)) return;
+                const parsedConfig = parseBridgeConfig(prompt);
+                if (!parsedConfig) return;
 
                 const name = pendingSetupName;
-                const candidateToken = prompt;
+                const candidateConfig = parsedConfig;
                 pendingSetupName = null;
 
                 // Fire async validation in background -- hook stays synchronous
                 (async () => {
                     try {
-                        const url = `${TELEGRAM_API}/bot${candidateToken}/getMe`;
-                        const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+                        const url = `${candidateConfig.relayUrl}/api/bridge/getMe`;
+                        const res = await fetch(url, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "x-bridge-secret": candidateConfig.sharedSecret,
+                            },
+                            body: "{}",
+                            signal: AbortSignal.timeout(10000),
+                        });
                         if (!res.ok) {
-                            if (res.status === 401) {
-                                await session.log("Invalid token. Make sure you copied it correctly from BotFather.");
+                            if (res.status === 401 || res.status === 403) {
+                                await session.log("The relay secret was rejected. Make sure it matches BRIDGE_SHARED_SECRET.");
                             } else {
-                                await session.log(`Telegram API returned HTTP ${res.status}. Try again later.`);
+                                await session.log(`Teams relay returned HTTP ${res.status}. Check the relay URL and try again.`);
                             }
                             return;
                         }
                         const data = await res.json();
-                        const username = data.result?.username || "unknown";
+                        const username = data.result?.username || candidateConfig.relayUrl;
 
                         // Re-read registry (another session may have modified it)
                         registry = loadJsonOrDefault(BOTS_REGISTRY_PATH, {});
                         registry[name] = {
-                            token: candidateToken,
+                            relayUrl: candidateConfig.relayUrl,
+                            sharedSecret: candidateConfig.sharedSecret,
                             username,
                             addedAt: new Date().toISOString(),
                         };
                         saveJsonAtomic(BOTS_REGISTRY_PATH, registry, 0o600);
                         mkdirSync(botDir(name), { recursive: true });
 
-                        await session.log(`Bot registered as '${name}' (@${username}). Use /telegram connect ${name} to start.`);
+                        await session.log(`Teams bridge registered as '${name}' (${username}). Use /teams connect ${name} to start.`);
                     } catch (err) {
                         if (err.name === "TimeoutError" || err.name === "AbortError") {
-                            await session.log("Request timed out reaching Telegram API. Check your network and try again.");
+                            await session.log("Request timed out reaching the Teams relay. Check your network and try again.");
                         } else {
-                            await session.log(`Failed to validate token: ${err.message}`);
+                            await session.log(`Failed to validate relay settings: ${err.message}`);
                         }
                     }
                 })();
 
-                return { modifiedPrompt: `[Telegram Bridge: validating bot token for '${name}'... Please wait.]` };
+                return { modifiedPrompt: `[Teams Bridge: validating relay settings for '${name}'... Please wait.]` };
             },
         },
     });
@@ -1366,9 +1237,9 @@ async function main() {
 
     const botCount = Object.keys(registry).length;
     if (botCount === 0) {
-        await session.log("Telegram bridge: no bots registered. Type /telegram setup <name> to add one.");
+        await session.log("Teams bridge: no connections registered. Type /teams setup <name> to add one.");
     } else {
-        await session.log(`Telegram bridge: dormant (${botCount} bot(s) registered). Type /telegram connect <name> to start.`);
+        await session.log(`Teams bridge: dormant (${botCount} connection(s) registered). Type /teams connect <name> to start.`);
     }
 }
 
@@ -1406,6 +1277,6 @@ process.on("SIGTERM", async () => {
 });
 
 main().catch(err => {
-    console.error("telegram-bridge: fatal error:", err);
+    console.error("teams-bridge: fatal error:", err);
     process.exit(1);
 });

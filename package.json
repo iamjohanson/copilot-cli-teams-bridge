@@ -1,0 +1,22 @@
+{
+  "name": "copilot-cli-teams-bridge",
+  "version": "1.0.0",
+  "description": "GitHub Copilot CLI extension and relay service for Microsoft Teams personal chats.",
+  "scripts": {
+    "relay:start": "node relay/server.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamjohanson/copilot-cli-teams-bridge.git"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/iamjohanson/copilot-cli-teams-bridge/issues"
+  },
+  "homepage": "https://github.com/iamjohanson/copilot-cli-teams-bridge#readme",
+  "dependencies": {
+    "botbuilder": "^4.23.1"
+  }
+}
