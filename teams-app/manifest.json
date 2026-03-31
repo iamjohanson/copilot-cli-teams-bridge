@@ -1,0 +1,58 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.21/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.21",
+  "version": "1.0.0",
+  "id": "fec8c5b4-5a84-49ac-822c-238dd5147e86",
+  "packageName": "com.iamjohanson.copilotcliteamsbridge",
+  "developer": {
+    "name": "Johanson Sandrasagra",
+    "websiteUrl": "https://github.com/iamjohanson/copilot-cli-teams-bridge",
+    "privacyUrl": "https://github.com/iamjohanson/copilot-cli-teams-bridge/blob/main/README.md",
+    "termsOfUseUrl": "https://github.com/iamjohanson/copilot-cli-teams-bridge/blob/main/README.md"
+  },
+  "name": {
+    "short": "Copilot CLI",
+    "full": "Copilot CLI Teams Bridge"
+  },
+  "description": {
+    "short": "Bridge one Copilot CLI session into Microsoft Teams personal chat.",
+    "full": "Use Microsoft Teams personal chat to pair with and interact with a running GitHub Copilot CLI session through the relay in this repository."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#5B5FC7",
+  "bots": [
+    {
+      "botId": "fec8c5b4-5a84-49ac-822c-238dd5147e86",
+      "scopes": [
+        "personal"
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": [
+            "personal"
+          ],
+          "commands": [
+            {
+              "title": "Help",
+              "description": "Show setup help for the Copilot CLI Teams Bridge"
+            },
+            {
+              "title": "Pair",
+              "description": "Start or refresh pairing with the connected Copilot CLI session"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": []
+}

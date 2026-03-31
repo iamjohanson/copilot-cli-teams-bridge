@@ -6,3 +6,6 @@ install.sh
 CLAUDE.md
 bots.json
 bots/
+node_modules/
+relay/.data/
+npm-debug.log*
