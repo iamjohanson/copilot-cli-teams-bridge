@@ -1,104 +1,201 @@
-# Copilot CLI Telegram Bridge
+# Copilot CLI Teams Bridge
 
-A GitHub Copilot CLI extension that bridges Telegram messages bidirectionally with a CLI session -- send messages from Telegram, get agent responses back.
+A GitHub Copilot CLI extension plus small relay service that lets you chat with one Copilot CLI session from Microsoft Teams personal chat.
+
+## What changed from the Telegram version
+
+Microsoft Teams bots cannot be polled directly like Telegram bots. This repo now uses:
+
+- a local Copilot CLI extension that handles pairing, queueing, and session forwarding
+- a small Teams relay service that receives Teams webhook traffic and exposes a simple authenticated bridge API back to the extension
+
+## Current scope
+
+This version is intentionally focused on the smallest reliable Teams experience:
+
+- Microsoft Teams **personal chat** support
+- text messages both ways
+- pairing code confirmation
+- typing indicator and tool-status updates
+- multi-connection support inside Copilot CLI
+
+Not included in v1:
+
+- channel conversations
+- group chats
+- inbound file uploads
+- outbound image/file delivery
+
+## Repository layout
+
+- `extension.mjs` - Copilot CLI extension with the `/teams` command
+- `relay/server.mjs` - Teams relay service you host on a public HTTPS URL
+- `skills/teams-install/SKILL.md` - install skill for the extension
 
 ## Prerequisites
 
 - [GitHub Copilot CLI](https://github.com/github/copilot-cli) installed and working
-- Extensions enabled (experimental feature -- run `/experimental on`)
-- A Telegram account
-- Node.js 18+ (the extension uses the built-in `fetch` API)
+- Extensions enabled in Copilot CLI
+- A Microsoft 365 account that can upload or install a custom Teams app
+- A Microsoft app registration and bot registration for Teams, even for local development or sideloading
+- Node.js 18+
 
-## Install
+## Install the Copilot CLI extension
 
-### Plugin install (recommended)
+### Plugin install
 
 1. In Copilot CLI, run:
    ```
-   /plugin install examon/copilot-cli-telegram-bridge
+   /plugin install iamjohanson/copilot-cli-teams-bridge
    ```
-2. Restart Copilot CLI
-3. Run the install skill to copy the extension into place:
+2. Restart Copilot CLI.
+3. Run:
    ```
-   /copilot-cli-telegram-bridge:telegram-install
+   /copilot-cli-teams-bridge:teams-install
    ```
-4. Restart Copilot CLI again (the extension loads on startup)
+4. Restart Copilot CLI again.
 
 ### Manual install
 
-1. Clone the repo and copy the extension file:
+1. Clone this repo.
+2. Copy `extension.mjs` into your Copilot extensions directory:
    ```bash
-   git clone https://github.com/examon/copilot-cli-telegram-bridge.git
-   mkdir -p ~/.copilot/extensions/copilot-cli-telegram-bridge
-   cp copilot-cli-telegram-bridge/extension.mjs ~/.copilot/extensions/copilot-cli-telegram-bridge/
+   mkdir -p ~/.copilot/extensions/copilot-cli-teams-bridge
+   cp extension.mjs ~/.copilot/extensions/copilot-cli-teams-bridge/
    ```
-2. Restart Copilot CLI
+3. Restart Copilot CLI.
 
-## Create a Telegram Bot
+## Run the Teams relay service
 
-1. Open Telegram and search for **@BotFather**
-2. Send `/newbot`
-3. Choose a display name and a username (must end in `bot`)
-4. BotFather replies with a token like `123456789:ABCdefGHI...` -- copy it
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Set these environment variables anywhere you host the relay, including your local machine:
 
-## Setup and Connect
+   - `MicrosoftAppId`
+   - `MicrosoftAppPassword`
+   - `BRIDGE_SHARED_SECRET`
+   - `PUBLIC_BASE_URL`
+   - optional: `TEAMS_BOT_NAME`
 
-1. Register the bot in Copilot CLI:
+3. Start the relay:
+   ```bash
+   npm run relay:start
    ```
-   /telegram setup mybot
+4. Open the relay home page in your browser. It shows:
+    - whether the relay is fully configured
+    - the Teams messaging endpoint you should use
+    - the exact JSON format Copilot CLI expects during `/teams setup`
+
+## Local-first development and Teams sideloading
+
+You can absolutely run the relay on your own machine and sideload the Teams app while using the Copilot CLI extension locally. That is the lowest-friction development path for this repo.
+
+What still does **not** go away:
+
+- Teams still requires a **Microsoft App ID / bot registration**
+- Teams still needs a **public HTTPS URL**
+- sideloading the app does **not** remove those two requirements
+- the tunnel only solves public reachability for your local relay
+
+The practical local workflow is:
+
+1. Install this Copilot CLI extension locally.
+2. Run the relay locally with `npm run relay:start`.
+3. Expose the relay through a public HTTPS tunnel such as:
+   - Visual Studio Dev Tunnels
+   - ngrok
+   - Cloudflare Tunnel
+   - any CLI-managed tunnel that gives you a public HTTPS URL to the local relay
+4. Set `PUBLIC_BASE_URL` to that tunnel URL.
+5. In the Teams Developer Portal, create or update a personal bot app that uses your Microsoft App ID and points its messaging endpoint to:
    ```
-2. Paste the bot token when prompted -- the extension validates it against the Telegram API
-3. Connect to the bot:
+   https://YOUR-TUNNEL-HOST/api/messages
    ```
-   /telegram connect mybot
+6. Sideload that Teams app for yourself.
+7. Send the Teams app one message so the relay stores your personal chat reference.
+8. In Copilot CLI, run `/teams setup myteamsbot` and paste the tunnel URL plus the shared secret.
+
+In other words: the Copilot CLI extension already covers the local Copilot side. The extra Teams-specific pieces are the bot registration plus any public HTTPS URL that forwards back to your local relay. If your CLI tooling can expose that URL directly, you can use it in place of a separate tunnel tool.
+
+## Non-technical setup guide
+
+These steps assume someone has already deployed the relay service from this repo for you.
+
+### Part 1: Prepare the Teams app
+
+1. Open the **Microsoft Teams Developer Portal**.
+2. Create a **new app**.
+3. In the **Bots** section, add a bot that uses your Azure Bot / Microsoft App ID.
+4. Set the messaging endpoint to:
    ```
-4. Open Telegram and send any message to your bot
-5. The bot replies asking you to check the Copilot CLI terminal for a pairing code
-6. Type the 6-character pairing code back to the bot in Telegram (case-insensitive, expires after 5 minutes)
-7. Done -- messages now flow both ways between Telegram and your CLI session
+   https://YOUR-RELAY-HOST/api/messages
+   ```
+    Replace `YOUR-RELAY-HOST` with the same public URL you set in the relay's `PUBLIC_BASE_URL`.
+    If you are hosting locally, this should be your public tunnel URL, not `localhost`.
+5. Turn on the **Personal** scope.
+6. Save the app and install it for yourself in Teams.
+7. Open the app in Teams and send it any short message like `hello`.
+
+### Part 2: Connect Copilot CLI
+
+1. In Copilot CLI, run:
+   ```
+   /teams setup myteamsbot
+   ```
+2. Paste a JSON block like this:
+   ```json
+   {
+     "relayUrl": "https://YOUR-RELAY-HOST",
+     "sharedSecret": "YOUR-BRIDGE-SHARED-SECRET"
+   }
+   ```
+3. When Copilot CLI confirms the bridge was saved, run:
+   ```
+   /teams connect myteamsbot
+   ```
+4. Go back to Teams and send the bot any message.
+5. The bot asks you to check Copilot CLI for a pairing code.
+6. Copy the pairing code from Copilot CLI and send it back in Teams.
+7. You are done. Messages now flow both ways.
+
+### What the non-technical user should expect
+
+- The first Teams message starts pairing.
+- After pairing, Teams becomes a remote chat window for the connected Copilot CLI session.
+- If you disconnect the CLI session, Teams receives a short disconnect message.
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `/telegram setup <name>` | Register a new bot with a local alias |
-| `/telegram connect <name>` | Connect this session to the named bot |
-| `/telegram connect` | List all registered bots with their status |
-| `/telegram disconnect` | Disconnect from the current bot |
-| `/telegram status` | Show all bots, availability, and paired users |
-| `/telegram remove <name>` | Remove a bot from the registry |
+| `/teams setup <name>` | Register a Teams relay connection with a local alias |
+| `/teams connect <name>` | Connect this session to the named Teams bridge |
+| `/teams connect` | List registered bridges |
+| `/teams disconnect` | Disconnect from the current Teams bridge |
+| `/teams status` | Show registered bridges and paired chat count |
+| `/teams remove <name>` | Remove a saved Teams bridge |
 
-## Multiple Bots
+## Multiple connections
 
-You can register as many bots as you want with `/telegram setup`. Each Copilot CLI session connects to one bot at a time, but multiple sessions can run different bots simultaneously.
+You can register more than one Teams bridge with `/teams setup <name>`.
 
-If a new session connects to a bot that another session already holds, the new session takes over and the old one releases gracefully.
-
-Access control is shared -- pairing with any bot grants access to all bots managed by this extension.
+Each Copilot CLI session can connect to one saved bridge at a time, and the existing lock-file behavior still prevents two local sessions from using the same saved bridge at once.
 
 ## Troubleshooting
 
-- **Extension not loading** -- make sure you enabled the EXTENSIONS feature flag (`/experimental` in the CLI). Then verify the file exists at `~/.copilot/extensions/copilot-cli-telegram-bridge/extension.mjs`
-- **Bot not responding** -- check that the token is valid. Try `/telegram disconnect` then `/telegram connect` again
-- **Pairing code expired** -- codes expire after 5 minutes. Send a new message to the bot to get a fresh one
-- **"Another session has this bot"** -- the bot is locked by another CLI session. Connecting again takes it over
+- **The Teams app does not answer** - make sure the Teams bot messaging endpoint is `https://YOUR-RELAY-HOST/api/messages`
+- **`/teams setup` fails** - confirm the relay URL is public HTTPS, the shared secret matches `BRIDGE_SHARED_SECRET`, and the URL is your tunnel/public host rather than `localhost`
+- **`/teams connect` fails** - open the relay home page and confirm it shows as configured
+- **Pairing code expired** - send a new message in Teams to request a fresh code
 
 ## Security
 
-Bot tokens are stored **in plain text** in `bots.json` (with restricted file permissions -- owner read/write only). Anyone with read access to that file can control your bot. Keep this in mind:
+The Copilot extension stores relay connection details, including the shared secret, in `bots.json` with restricted file permissions.
 
-- Do not commit `bots.json` to version control
-- Do not share or back up the extension directory without removing `bots.json` first
-- If a token is compromised, revoke it immediately via @BotFather (`/revoke`) and register a new one with `/telegram setup`
+- Do not commit `bots.json`
+- Do not share the relay secret broadly
+- If the secret is exposed, generate a new `BRIDGE_SHARED_SECRET` and re-run `/teams setup`
 
-## Uninstall
-
-1. Disconnect if connected: `/telegram disconnect`
-2. Remove the extension:
-   ```bash
-   rm -rf ~/.copilot/extensions/copilot-cli-telegram-bridge
-   ```
-3. If installed via plugin:
-   ```
-   /plugin uninstall copilot-cli-telegram-bridge
-   ```
+The relay service stores Teams conversation references in `relay/.data/bridge-store.json` so it can proactively send replies back into Teams personal chat.
