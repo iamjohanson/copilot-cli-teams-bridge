@@ -15,6 +15,7 @@ const PORT = Number(process.env.PORT || 3978);
 const SHARED_SECRET = process.env.BRIDGE_SHARED_SECRET || "";
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 const BOT_DISPLAY_NAME = process.env.TEAMS_BOT_NAME || "Copilot CLI Teams Bridge";
+const UPDATE_BUFFER_LIMIT = 500;
 
 if (!process.env.MicrosoftAppId && process.env.MICROSOFT_APP_ID) {
     process.env.MicrosoftAppId = process.env.MICROSOFT_APP_ID;
@@ -150,8 +151,8 @@ function buildBridgeUpdate(activity) {
 function queueUpdate(activity) {
     const update = buildBridgeUpdate(activity);
     updates.push(update);
-    if (updates.length > 500) {
-        updates.splice(0, updates.length - 500);
+    if (updates.length > UPDATE_BUFFER_LIMIT) {
+        updates.splice(0, updates.length - UPDATE_BUFFER_LIMIT);
     }
     for (const waiter of [...pollWaiters]) {
         const available = updates.filter(item => item.update_id >= waiter.offset);
@@ -203,7 +204,7 @@ async function continueConversation(conversationId, logic) {
 
 function buildStatusPage() {
     const configured = relayConfigured();
-    const publicBaseUrl = PUBLIC_BASE_URL || "https://your-relay.example.com";
+    const publicBaseUrl = PUBLIC_BASE_URL || "https://REPLACE-WITH-YOUR-RELAY-URL";
     const setupJson = htmlEscape(JSON.stringify({
         relayUrl: publicBaseUrl,
         sharedSecret: "paste-your-BRIDGE_SHARED_SECRET-here",
@@ -241,7 +242,7 @@ function buildStatusPage() {
       <li>Add the environment variables <code>MicrosoftAppId</code>, <code>MicrosoftAppPassword</code>, <code>BRIDGE_SHARED_SECRET</code>, and <code>PUBLIC_BASE_URL</code>.</li>
       <li>In the Microsoft Teams Developer Portal, create a bot app that uses your Azure bot App ID and points its messaging endpoint to <code>${htmlEscape(`${publicBaseUrl}/api/messages`)}</code>.</li>
       <li>Install the Teams app for yourself in Teams and send it any message once so the relay can store your personal chat reference.</li>
-      <li>In Copilot CLI, run <code>/teams setup myteamsbot</code> and paste this JSON with your real secret:</li>
+      <li>In Copilot CLI, run <code>/teams setup myteamsbot</code> and paste this JSON after replacing both placeholder values with your real relay URL and secret:</li>
     </ol>
     <pre>${setupJson}</pre>
     <p>After setup, run <code>/teams connect myteamsbot</code>, send any message in Teams, then complete the pairing code shown in Copilot CLI.</p>
@@ -262,6 +263,10 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "POST" && url.pathname === "/api/messages") {
             if (!relayConfigured()) {
                 unauthorized(res, "Relay is not fully configured.", 503);
+                return;
+            }
+            if (!req.headers.authorization) {
+                unauthorized(res, "Missing Authorization header.", 401);
                 return;
             }
 
@@ -383,19 +388,4 @@ server.listen(PORT, () => {
     if (!relayConfigured()) {
         console.log("teams-relay: set MicrosoftAppId, MicrosoftAppPassword, BRIDGE_SHARED_SECRET, and PUBLIC_BASE_URL before using Teams.");
     }
-});
-
-async function reapPollWaiters() {
-    while (true) {
-        await wait(30000);
-        for (const waiter of [...pollWaiters]) {
-            if (waiter.timer?._destroyed) {
-                pollWaiters.delete(waiter);
-            }
-        }
-    }
-}
-
-reapPollWaiters().catch(error => {
-    console.error("teams-relay: waiter cleanup failed:", error);
 });

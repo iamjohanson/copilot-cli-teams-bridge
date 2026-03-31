@@ -14,8 +14,8 @@
       "description": "Bidirectional Microsoft Teams bridge for GitHub Copilot CLI personal chats.",
       "version": "1.0.0",
       "author": {
-        "name": "examon",
-        "url": "https://github.com/examon"
+        "name": "iamjohanson",
+        "url": "https://github.com/iamjohanson"
       },
       "homepage": "https://github.com/iamjohanson/copilot-cli-teams-bridge",
       "license": "MIT",

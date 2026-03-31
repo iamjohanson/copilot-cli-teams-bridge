@@ -17,6 +17,7 @@ const BOTS_REGISTRY_PATH = join(EXT_DIR, "bots.json");
 const BOTS_DIR = join(EXT_DIR, "bots");
 const TMP_DIR = join("/tmp", `teams-bridge-${process.pid}`);
 const POLL_TIMEOUT = 30;
+// Keep message chunks well below the Teams bot text limit; 28,000 ASCII-heavy characters stays under the 28 KB ceiling, while multibyte text may need smaller chunks.
 const CHUNK_MAX = 28000;
 const SEND_PACE_MS = 50;
 const TYPING_INTERVAL_MS = 4000;
@@ -126,7 +127,8 @@ async function callBridge(method, params = {}) {
     }
     if (!res.ok) {
         const body = await res.text().catch(() => "");
-        const err = new Error(`Teams relay ${method} failed: ${res.status} ${body}`);
+        const snippet = body.replace(/\s+/g, " ").slice(0, 200);
+        const err = new Error(`Teams relay ${method} failed: ${res.status}${snippet ? ` ${snippet}` : ""}`);
         err.status = res.status;
         throw err;
     }
@@ -280,7 +282,7 @@ function reloadAccess() {
     access = loadJsonOrDefault(ACCESS_PATH, { allowedUsers: [], pending: {} });
 }
 
-function isAllowed(chatId) {
+function isChatAllowed(chatId) {
     return access.allowedUsers.includes(String(chatId));
 }
 
@@ -581,7 +583,7 @@ async function processUpdate(update) {
     reloadAccess();
 
     // If awaiting ask_user input and sender is allowed, resolve the pending promise
-    if (awaitingInput && isAllowed(chatIdStr)) {
+    if (awaitingInput && isChatAllowed(chatIdStr)) {
         const { resolve } = awaitingInput;
         clearTimeout(awaitingInput.timer);
         awaitingInput = null;
@@ -589,7 +591,7 @@ async function processUpdate(update) {
         return;
     }
 
-    if (!isAllowed(chatIdStr)) {
+    if (!isChatAllowed(chatIdStr)) {
         await handlePairing(chatId, userId, text);
         return;
     }
@@ -802,9 +804,12 @@ async function handleSetup(name) {
         "Steps:\n" +
         "1. Deploy the Teams relay from this repository and note its public HTTPS URL\n" +
         "2. Choose a BRIDGE_SHARED_SECRET value for that relay\n" +
-        "3. Install your Teams app and send it one message so the relay learns your chat\n" +
+        "3. Install your Teams app and send it one message so the relay can store your chat reference\n" +
         "4. Paste this JSON here:\n" +
-        '{"relayUrl":"https://your-relay.example.com","sharedSecret":"your-secret"}'
+        "{\n" +
+        '  "relayUrl": "https://YOUR-RELAY-HOST",\n' +
+        '  "sharedSecret": "YOUR-BRIDGE-SHARED-SECRET"\n' +
+        "}"
     );
 }
 

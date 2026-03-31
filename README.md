@@ -101,6 +101,7 @@ These steps assume someone has already deployed the relay service from this repo
    ```
    https://YOUR-RELAY-HOST/api/messages
    ```
+   Replace `YOUR-RELAY-HOST` with the same public URL you set in the relay's `PUBLIC_BASE_URL`.
 5. Turn on the **Personal** scope.
 6. Save the app and install it for yourself in Teams.
 7. Open the app in Teams and send it any short message like `hello`.
