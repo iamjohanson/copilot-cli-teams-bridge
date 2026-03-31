@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Relay home page walkthrough</title>
+  <desc id="desc">Illustrated browser screenshot showing the Teams relay home page with ready status, messaging endpoint, health endpoint, and setup JSON.</desc>
+  <rect width="1200" height="760" fill="#f6f8fb"/>
+  <rect x="45" y="40" width="1110" height="680" rx="18" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="45" y="40" width="1110" height="60" rx="18" fill="#e9eef7"/>
+  <circle cx="82" cy="70" r="8" fill="#ff6b6b"/>
+  <circle cx="108" cy="70" r="8" fill="#ffd166"/>
+  <circle cx="134" cy="70" r="8" fill="#4cc9f0"/>
+  <rect x="170" y="55" width="760" height="30" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="190" y="76" font-family="Consolas, 'Courier New', monospace" font-size="18" fill="#334155">https://your-relay.example.com</text>
+
+  <text x="85" y="150" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="bold" fill="#0f172a">Copilot CLI Teams Relay</text>
+  <rect x="85" y="175" width="250" height="42" rx="21" fill="#dcfce7" stroke="#86efac"/>
+  <text x="112" y="202" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#166534">Ready for Teams traffic</text>
+
+  <rect x="85" y="255" width="475" height="160" rx="16" fill="#f8fafc" stroke="#d0d7de"/>
+  <text x="110" y="295" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#0f172a">Relay details</text>
+  <text x="110" y="335" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#334155">Teams bot endpoint</text>
+  <text x="110" y="365" font-family="Consolas, 'Courier New', monospace" font-size="18" fill="#2563eb">https://your-relay.example.com/api/messages</text>
+  <text x="110" y="402" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#334155">Relay health endpoint</text>
+  <text x="110" y="432" font-family="Consolas, 'Courier New', monospace" font-size="18" fill="#2563eb">https://your-relay.example.com/api/bridge/getMe</text>
+
+  <rect x="595" y="255" width="475" height="310" rx="16" fill="#f8fafc" stroke="#d0d7de"/>
+  <text x="620" y="295" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#0f172a">Copy this into /teams setup</text>
+  <rect x="620" y="325" width="425" height="205" rx="12" fill="#111827"/>
+  <text x="645" y="365" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">{</text>
+  <text x="645" y="400" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">  "relayUrl": "https://your-relay.example.com",</text>
+  <text x="645" y="435" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">  "sharedSecret": "paste-your-BRIDGE_SHARED_SECRET-here"</text>
+  <text x="645" y="470" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">}</text>
+  <text x="645" y="510" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#cbd5e1">Use the base relay URL, not /api/messages.</text>
+
+  <rect x="85" y="455" width="475" height="180" rx="16" fill="#f8fafc" stroke="#d0d7de"/>
+  <text x="110" y="495" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#0f172a">Checklist</text>
+  <text x="110" y="530" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">1. Deploy the relay on public HTTPS.</text>
+  <text x="110" y="560" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">2. Set MicrosoftAppId, MicrosoftAppPassword,</text>
+  <text x="130" y="586" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">BRIDGE_SHARED_SECRET, and PUBLIC_BASE_URL.</text>
+  <text x="110" y="616" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">3. Point Teams to /api/messages.</text>
+
+  <circle cx="1085" cy="305" r="22" fill="#2563eb"/>
+  <text x="1078" y="313" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#ffffff">1</text>
+  <text x="1085" y="605" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">This page is the fastest way to verify the relay is ready.</text>
+</svg>

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Teams Developer Portal walkthrough</title>
+  <desc id="desc">Illustrated Teams Developer Portal screenshot showing bot configuration, messaging endpoint, and personal scope enabled.</desc>
+  <rect width="1200" height="760" fill="#f6f8fb"/>
+  <rect x="40" y="38" width="1120" height="684" rx="18" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="40" y="38" width="1120" height="66" rx="18" fill="#4f46e5"/>
+  <text x="78" y="80" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="bold" fill="#ffffff">Microsoft Teams Developer Portal</text>
+
+  <rect x="78" y="140" width="240" height="510" rx="14" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="108" y="185" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#312e81">App settings</text>
+  <text x="108" y="230" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#4338ca">Overview</text>
+  <text x="108" y="268" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#4338ca">Branding</text>
+  <text x="108" y="306" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#4338ca">Bots</text>
+  <rect x="96" y="324" width="200" height="44" rx="10" fill="#c7d2fe"/>
+  <text x="120" y="353" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#312e81">Bot capability</text>
+  <text x="108" y="408" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#4338ca">Scopes</text>
+
+  <text x="360" y="165" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="bold" fill="#0f172a">Bot configuration</text>
+
+  <text x="360" y="230" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#334155">Microsoft App ID</text>
+  <rect x="360" y="245" width="720" height="48" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="380" y="276" font-family="Consolas, 'Courier New', monospace" font-size="18" fill="#475569">00000000-1111-2222-3333-444444444444</text>
+
+  <text x="360" y="345" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#334155">Messaging endpoint</text>
+  <rect x="360" y="360" width="720" height="56" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="380" y="395" font-family="Consolas, 'Courier New', monospace" font-size="18" fill="#2563eb">https://your-relay.example.com/api/messages</text>
+
+  <text x="360" y="470" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#334155">Scopes</text>
+  <rect x="360" y="490" width="720" height="110" rx="14" fill="#f8fafc" stroke="#d0d7de"/>
+  <rect x="390" y="520" width="26" height="26" rx="5" fill="#4f46e5"/>
+  <text x="396" y="539" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#ffffff">✓</text>
+  <text x="432" y="539" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#0f172a">Personal</text>
+  <text x="432" y="570" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">Required for this bridge. Channels and group chats are out of scope for v1.</text>
+
+  <rect x="910" y="630" width="170" height="54" rx="12" fill="#4f46e5"/>
+  <text x="965" y="664" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff">Save</text>
+
+  <circle cx="1100" cy="390" r="22" fill="#2563eb"/>
+  <text x="1093" y="398" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#ffffff">1</text>
+  <text x="1090" y="440" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">Use the public relay URL, never localhost.</text>
+</svg>

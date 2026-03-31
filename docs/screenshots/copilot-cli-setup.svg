@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Copilot CLI setup walkthrough</title>
+  <desc id="desc">Illustrated terminal screenshot showing plugin installation, teams-install, teams setup, and teams connect commands.</desc>
+  <rect width="1200" height="760" fill="#f6f8fb"/>
+  <rect x="60" y="50" width="1080" height="660" rx="18" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="60" y="50" width="1080" height="54" rx="18" fill="#e9eef7"/>
+  <circle cx="96" cy="77" r="8" fill="#ff6b6b"/>
+  <circle cx="122" cy="77" r="8" fill="#ffd166"/>
+  <circle cx="148" cy="77" r="8" fill="#4cc9f0"/>
+  <text x="180" y="83" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#0f172a">Copilot CLI - Teams bridge setup</text>
+
+  <rect x="95" y="130" width="1010" height="520" rx="14" fill="#0f172a"/>
+  <text x="125" y="175" font-family="Consolas, 'Courier New', monospace" font-size="24" fill="#22c55e">$ /plugin install iamjohanson/copilot-cli-teams-bridge</text>
+  <text x="125" y="215" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#cbd5e1">Plugin installed. Restart Copilot CLI.</text>
+
+  <text x="125" y="275" font-family="Consolas, 'Courier New', monospace" font-size="24" fill="#22c55e">$ /copilot-cli-teams-bridge:teams-install</text>
+  <text x="125" y="315" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#cbd5e1">Teams Bridge extension installed. Restart Copilot CLI again.</text>
+
+  <text x="125" y="385" font-family="Consolas, 'Courier New', monospace" font-size="24" fill="#22c55e">$ /teams setup myteamsbot</text>
+  <text x="125" y="425" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#cbd5e1">Paste relay JSON from the relay home page:</text>
+  <rect x="120" y="445" width="760" height="120" rx="12" fill="#111827" stroke="#334155"/>
+  <text x="145" y="480" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">{</text>
+  <text x="145" y="510" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">  "relayUrl": "https://your-relay.example.com",</text>
+  <text x="145" y="540" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">  "sharedSecret": "your-BRIDGE_SHARED_SECRET"</text>
+  <text x="145" y="570" font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#93c5fd">}</text>
+
+  <text x="125" y="620" font-family="Consolas, 'Courier New', monospace" font-size="24" fill="#22c55e">$ /teams connect myteamsbot</text>
+
+  <circle cx="990" cy="470" r="22" fill="#2563eb"/>
+  <text x="983" y="478" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#ffffff">1</text>
+  <text x="1025" y="463" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#0f172a">Install and restart</text>
+  <text x="1025" y="490" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">Run the plugin install, then the</text>
+  <text x="1025" y="514" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">teams-install skill, then restart.</text>
+
+  <circle cx="990" cy="585" r="22" fill="#0ea5e9"/>
+  <text x="983" y="593" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#ffffff">2</text>
+  <text x="1025" y="578" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#0f172a">Save and connect</text>
+  <text x="1025" y="605" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">Paste the relay JSON, then run</text>
+  <text x="1025" y="629" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">/teams connect to start pairing.</text>
+</svg>
