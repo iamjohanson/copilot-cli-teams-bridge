@@ -238,14 +238,16 @@ function buildStatusPage() {
   <div class="card">
     <h2>Non-technical setup checklist</h2>
     <ol>
-      <li>Deploy this relay somewhere public over HTTPS, such as Azure App Service.</li>
+      <li>Run this relay somewhere public over HTTPS, or run it locally and expose it with a public HTTPS dev tunnel.</li>
       <li>Add the environment variables <code>MicrosoftAppId</code>, <code>MicrosoftAppPassword</code>, <code>BRIDGE_SHARED_SECRET</code>, and <code>PUBLIC_BASE_URL</code>.</li>
       <li>In the Microsoft Teams Developer Portal, create a bot app that uses your Azure bot App ID and points its messaging endpoint to <code>${htmlEscape(`${publicBaseUrl}/api/messages`)}</code>.</li>
+      <li>Teams still requires that bot/app registration even when you sideload the app and run the relay locally.</li>
       <li>Install the Teams app for yourself in Teams and send it any message once so the relay can store your personal chat reference.</li>
       <li>In Copilot CLI, run <code>/teams setup myteamsbot</code> and paste this JSON after replacing both placeholder values with your real relay URL and secret:</li>
     </ol>
     <pre>${setupJson}</pre>
     <p>After setup, run <code>/teams connect myteamsbot</code>, send any message in Teams, then complete the pairing code shown in Copilot CLI.</p>
+    <p>If you are hosting locally, use your tunnel URL for both <code>PUBLIC_BASE_URL</code> and <code>relayUrl</code>. Do not use <code>localhost</code> inside Teams.</p>
   </div>
 </body>
 </html>`;

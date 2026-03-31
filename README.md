@@ -37,7 +37,7 @@ Not included in v1:
 - [GitHub Copilot CLI](https://github.com/github/copilot-cli) installed and working
 - Extensions enabled in Copilot CLI
 - A Microsoft 365 account that can upload or install a custom Teams app
-- An Azure app registration and bot registration for Teams
+- A Microsoft app registration and bot registration for Teams, even for local development or sideloading
 - Node.js 18+
 
 ## Install the Copilot CLI extension
@@ -71,7 +71,7 @@ Not included in v1:
    ```bash
    npm install
    ```
-2. Set these environment variables where you host the relay:
+2. Set these environment variables anywhere you host the relay, including your local machine:
 
    - `MicrosoftAppId`
    - `MicrosoftAppPassword`
@@ -84,9 +84,38 @@ Not included in v1:
    npm run relay:start
    ```
 4. Open the relay home page in your browser. It shows:
-   - whether the relay is fully configured
-   - the Teams messaging endpoint you should use
-   - the exact JSON format Copilot CLI expects during `/teams setup`
+    - whether the relay is fully configured
+    - the Teams messaging endpoint you should use
+    - the exact JSON format Copilot CLI expects during `/teams setup`
+
+## Local-first development and Teams sideloading
+
+You can absolutely run the relay on your own machine and sideload the Teams app while using the Copilot CLI extension locally. That is the lowest-friction development path for this repo.
+
+What still does **not** go away:
+
+- Teams still requires a **Microsoft App ID / bot registration**
+- Teams still needs a **public HTTPS URL**
+- sideloading the app does **not** remove those two requirements
+
+The practical local workflow is:
+
+1. Install this Copilot CLI extension locally.
+2. Run the relay locally with `npm run relay:start`.
+3. Expose the relay through a public HTTPS dev tunnel such as:
+   - Visual Studio Dev Tunnels
+   - ngrok
+   - Cloudflare Tunnel
+4. Set `PUBLIC_BASE_URL` to that tunnel URL.
+5. In the Teams Developer Portal, create or update a personal bot app that uses your Microsoft App ID and points its messaging endpoint to:
+   ```
+   https://YOUR-TUNNEL-HOST/api/messages
+   ```
+6. Sideload that Teams app for yourself.
+7. Send the Teams app one message so the relay stores your personal chat reference.
+8. In Copilot CLI, run `/teams setup myteamsbot` and paste the tunnel URL plus the shared secret.
+
+In other words: the Copilot CLI extension already covers the local Copilot side. The extra Teams-specific piece is just the bot registration plus a public HTTPS tunnel back to your local relay.
 
 ## Non-technical setup guide
 
@@ -101,7 +130,8 @@ These steps assume someone has already deployed the relay service from this repo
    ```
    https://YOUR-RELAY-HOST/api/messages
    ```
-   Replace `YOUR-RELAY-HOST` with the same public URL you set in the relay's `PUBLIC_BASE_URL`.
+    Replace `YOUR-RELAY-HOST` with the same public URL you set in the relay's `PUBLIC_BASE_URL`.
+    If you are hosting locally, this should be your dev tunnel URL, not `localhost`.
 5. Turn on the **Personal** scope.
 6. Save the app and install it for yourself in Teams.
 7. Open the app in Teams and send it any short message like `hello`.
@@ -154,7 +184,7 @@ Each Copilot CLI session can connect to one saved bridge at a time, and the exis
 ## Troubleshooting
 
 - **The Teams app does not answer** - make sure the Teams bot messaging endpoint is `https://YOUR-RELAY-HOST/api/messages`
-- **`/teams setup` fails** - confirm the relay URL is public HTTPS and the shared secret matches `BRIDGE_SHARED_SECRET`
+- **`/teams setup` fails** - confirm the relay URL is public HTTPS, the shared secret matches `BRIDGE_SHARED_SECRET`, and the URL is your tunnel/public host rather than `localhost`
 - **`/teams connect` fails** - open the relay home page and confirm it shows as configured
 - **Pairing code expired** - send a new message in Teams to request a fresh code
 
