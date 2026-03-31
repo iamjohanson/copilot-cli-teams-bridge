@@ -97,15 +97,17 @@ What still does **not** go away:
 - Teams still requires a **Microsoft App ID / bot registration**
 - Teams still needs a **public HTTPS URL**
 - sideloading the app does **not** remove those two requirements
+- the tunnel only solves public reachability for your local relay
 
 The practical local workflow is:
 
 1. Install this Copilot CLI extension locally.
 2. Run the relay locally with `npm run relay:start`.
-3. Expose the relay through a public HTTPS dev tunnel such as:
+3. Expose the relay through a public HTTPS tunnel such as:
    - Visual Studio Dev Tunnels
    - ngrok
    - Cloudflare Tunnel
+   - any CLI-managed tunnel that gives you a public HTTPS URL to the local relay
 4. Set `PUBLIC_BASE_URL` to that tunnel URL.
 5. In the Teams Developer Portal, create or update a personal bot app that uses your Microsoft App ID and points its messaging endpoint to:
    ```
@@ -115,7 +117,7 @@ The practical local workflow is:
 7. Send the Teams app one message so the relay stores your personal chat reference.
 8. In Copilot CLI, run `/teams setup myteamsbot` and paste the tunnel URL plus the shared secret.
 
-In other words: the Copilot CLI extension already covers the local Copilot side. The extra Teams-specific piece is just the bot registration plus a public HTTPS tunnel back to your local relay.
+In other words: the Copilot CLI extension already covers the local Copilot side. The extra Teams-specific pieces are the bot registration plus any public HTTPS URL that forwards back to your local relay. If your CLI tooling can expose that URL directly, you can use it in place of a separate tunnel tool.
 
 ## Non-technical setup guide
 
@@ -131,7 +133,7 @@ These steps assume someone has already deployed the relay service from this repo
    https://YOUR-RELAY-HOST/api/messages
    ```
     Replace `YOUR-RELAY-HOST` with the same public URL you set in the relay's `PUBLIC_BASE_URL`.
-    If you are hosting locally, this should be your dev tunnel URL, not `localhost`.
+    If you are hosting locally, this should be your public tunnel URL, not `localhost`.
 5. Turn on the **Personal** scope.
 6. Save the app and install it for yourself in Teams.
 7. Open the app in Teams and send it any short message like `hello`.
